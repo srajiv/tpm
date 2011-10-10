@@ -509,6 +509,7 @@ static int tpm_tis_init(struct device *dev, resource_size_t start,
 	u32 vendor, intfcaps, intmask;
 	int rc, i, irq_s, irq_e;
 	struct tpm_chip *chip;
+	u8 digest[TPM_DIGEST_SIZE];
 
 	if (!(chip = tpm_register_hardware(dev, &tpm_tis)))
 		return -ENODEV;
@@ -575,6 +576,18 @@ static int tpm_tis_init(struct device *dev, resource_size_t start,
 
 	/* get the timeouts before testing for irqs */
 	tpm_get_timeouts(chip);
+
+	/* test for correctly working TPM; refuse driver if not working 
+	   to prevent suspend/resume problems */
+	rc = tpm_pcr_read(chip->dev_num, 0, digest);
+	if (rc != 0) {
+		dev_err(dev, "Could not read PCR 0. "
+			"TPM is not working correctly.\n");
+		dev_err(dev, "Was machine previously suspended without TPM "
+			"driver present?\n");
+		rc = -ENODEV;
+		goto out_err;
+	}
 
 	/* INTERRUPT Setup */
 	init_waitqueue_head(&chip->vendor.read_queue);
